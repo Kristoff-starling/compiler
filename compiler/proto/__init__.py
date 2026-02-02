@@ -31,14 +31,19 @@ class ProtoMessageField:
     ProtoMessageField defines a field in a message.
     
     Args:
-        content (str): the content of the field. The expected format is <type> <name> = <value>
+        content (str): the content of the field. The expected format is [repeated] <type> <name> = <value>
         added (bool): whether the field is added by the compiler (i.e., accessed in ANF)
     """
     def __init__(self, content: str, added: bool = False):
         words = content.strip().split(" ")
         words = [word for word in words if word != ""] # avoid multiple spaces between keywords
-        self._type = words[0]
-        self._name = camel_to_snake(words[1])
+        
+        if words[0] == "repeated":
+            self._type = "repeated " + words[1]
+            self._name = camel_to_snake(words[2])
+        else:
+            self._type = words[0]
+            self._name = camel_to_snake(words[1])
         self._annotation_pkg = None
         self._added = added
     
@@ -79,7 +84,8 @@ class ProtoMessage:
         self._message_name = message_match.group(1)
         self._fields: Dict[str, ProtoMessageField] = {}
         
-        field_pattern = re.compile(r"\s+(\w+)\s+(\w+)\s+=\s+\d+;")
+        # Match optional "repeated" keyword, then type, then name
+        field_pattern = re.compile(r"\s+(repeated\s+)?(\w+)\s+(\w+)\s+=\s+\d+;")
         for match in field_pattern.finditer(content):
             field = ProtoMessageField(match.group(0).strip())
             self._fields[field.name] = field
@@ -130,7 +136,7 @@ class ProtoRpcMethod:
     """
     def __init__(self, content: str):
         rpc_match = re.match(
-            r"rpc\s+(\w+)\s*\((stream\s+)?(\w+)\)\s+returns\s*\((stream\s+)?(\w+)\)\s*;",
+            r"rpc\s+(\w+)\s*\((stream\s+)?(\w+)\)\s+returns\s*\((stream\s+)?(\w+)\)\s*(;|\{\})",
             content.strip()
         )
         if not rpc_match:
@@ -187,7 +193,7 @@ class ProtoService:
         self._service_name = service_match.group(1)
         
         rpc_pattern = re.compile(
-            r"rpc\s+\w+\s*\([^)]*\)\s+returns\s*\([^)]*\)\s*;",
+            r"rpc\s+\w+\s*\([^)]*\)\s+returns\s*\([^)]*\)\s*(;|\{\})",
             re.MULTILINE | re.DOTALL
         )
         self._rpc_methods: Dict[str, ProtoRpcMethod] = {}
