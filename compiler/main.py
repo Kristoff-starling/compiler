@@ -66,7 +66,6 @@ def parse_args():
         "--arpc_stub_dir",
         type=str,
         help="(arpc only) serialization stub need to be compiled from the annotated proto file",
-        default=f"/users/{os.getenv('USER')}/compiler/compiler/experiments/arpc-sigcomm/kv-store-symphony/symphony"
     )
     # Arguments for developers
     parser.add_argument(
@@ -298,16 +297,18 @@ def main(args):
         handle_state(graphirs)
     
     # If some elements require aRPC backend, we need to annotate related proto files.
+    proto_to_fields = dict()
     for gir in graphirs.values():
-        accessed_fields = dict()
         proto_path = ""
         for element in gir.complete_chain():
             if "arpc" in element.target:
                 if proto_path != "" and proto_path != element.proto_path:
                     raise ValueError("Elements on the same edge should use the same proto file.")
                 proto_path = element.proto_path
-                if element.method not in accessed_fields:
-                    accessed_fields[element.method] = {"request": [], "response": []}
+                if proto_path not in proto_to_fields:
+                    proto_to_fields[proto_path] = {}
+                if element.method not in proto_to_fields[proto_path]:
+                    proto_to_fields[proto_path][element.method] = {"request": [], "response": []}
                 # accessed fields = Union(read, write, record)
                 req_fields = element.get_prop("request", "read") + element.get_prop("request", "write") + element.get_prop("request", "record")
                 resp_fields = element.get_prop("response", "read") + element.get_prop("response", "write") + element.get_prop("response", "record")
@@ -319,16 +320,15 @@ def main(args):
                 req_fields = list(filter(filter_lambda, req_fields))
                 resp_fields = list(filter(filter_lambda, resp_fields))
 
-                accessed_fields[element.method]["request"].extend(req_fields)
-                accessed_fields[element.method]["response"].extend(resp_fields)
-        if proto_path != "":
-            proto_obj = proto_dict[proto_path]
-            for method, fields in accessed_fields.items():
-                proto_obj.extend_annotation(method, fields["request"], fields["response"])
-            proto_name = proto_path.split("/")[-1].replace(".proto", "") + "_" + gir.client + "-" + gir.server + "_arpc.proto"
-            with open(os.path.join(gen_dir, proto_name), "w") as f:
-                f.write(proto_obj.export())
-    
+                proto_to_fields[proto_path][element.method]["request"].extend(req_fields)
+                proto_to_fields[proto_path][element.method]["response"].extend(resp_fields)
+    for proto_path, data in proto_to_fields.items():
+        proto_obj = proto_dict[proto_path]
+        for method, fields in data.items(): 
+            proto_obj.extend_annotation(method, fields["request"], fields["response"])
+        proto_name = proto_path.split("/")[-1].replace(".proto", "") + "_arpc.proto"
+        open(os.path.join(gen_dir, proto_name), "w").write(proto_obj.export())
+
     # Step 3: Generate backend code for the elements and deployment scripts.
     if not args.dry_run:
         GRAPH_LOG.info(

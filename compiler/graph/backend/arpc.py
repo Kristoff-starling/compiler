@@ -138,7 +138,8 @@ def scriptgen_arpc(
                 plugin_name = f"{service}-{timestamp}"
                 plugin_output = os.path.join(service_dir, plugin_name)
 
-                proto_file_name = f"{app_name}_{gir.client}-{gir.server}_arpc.proto"
+                # proto_file_name = f"{app_name}_{gir.client}-{gir.server}_arpc.proto"
+                proto_file_name = element.proto_path.split("/")[-1].replace(".proto", "") + "_arpc.proto"
                 execute_local(["cp", os.path.join(local_gen_dir, proto_file_name), args.arpc_stub_dir])
                 execute_local([
                     "protoc",
