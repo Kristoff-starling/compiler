@@ -27,8 +27,16 @@ def find_closing_brace(proto_content: str, start_pos: int) -> int:
 
 
 class ProtoMessageField:
+    """
+    ProtoMessageField defines a field in a message.
+    
+    Args:
+        content (str): the content of the field. The expected format is <type> <name> = <value>
+        added (bool): whether the field is added by the compiler (i.e., accessed in ANF)
+    """
     def __init__(self, content: str, added: bool = False):
         words = content.strip().split(" ")
+        words = [word for word in words if word != ""] # avoid multiple spaces between keywords
         self._type = words[0]
         self._name = camel_to_snake(words[1])
         self._annotation_pkg = None
@@ -58,6 +66,12 @@ class ProtoMessageField:
 
 
 class ProtoMessage:
+    """
+    ProtoMessage defines a message in a proto file.
+    
+    Args:
+        content (str): the content of the message. The expected format is message <name> { <fields> }
+    """
     def __init__(self, content: str):
         message_match = re.search(r"message\s+(\w+)\s+\{", content)
         if not message_match:
@@ -107,6 +121,13 @@ class ProtoMessage:
 
 
 class ProtoRpcMethod:
+    """
+    ProtoRpcMethod defines an RPC method in a proto service definition.
+    
+    Args:
+        content (str): the content of the RPC method. The expected format is: 
+            rpc <name> (<request_stream> <request_message>) returns (<response_stream> <response_message>)
+    """
     def __init__(self, content: str):
         rpc_match = re.match(
             r"rpc\s+(\w+)\s*\((stream\s+)?(\w+)\)\s+returns\s*\((stream\s+)?(\w+)\)\s*;",
@@ -153,6 +174,12 @@ class ProtoRpcMethod:
 
 
 class ProtoService:
+    """
+    ProtoService defines a service in a proto file.
+    
+    Args:
+        content (str): the content of the service. The expected format is service <name> { <RPC methods> }
+    """
     def __init__(self, content: str):
         service_match = re.search(r"service\s+(\w+)\s+\{", content)
         if not service_match:
@@ -224,13 +251,10 @@ class Proto:
     def package_name(self) -> str:
         return self._package_name
     
-    # @property
-    # def service_name(self) -> str:
-    #     return self._service.name
-    
     def extend_annotation(self, method_name: str, request_fields: List[str], response_fields: List[str]):
-        if len(request_fields) + len(response_fields) > 0:
-            self._annotation = True
+        if len(request_fields) + len(response_fields) == 0:
+            return
+        self._annotation = True
         req_msg, resp_msg = self.get_message(method_name, "request"), self.get_message(method_name, "response")
         req_msg.extend_annotation(self._package_name, request_fields)
         resp_msg.extend_annotation(self._package_name, response_fields)
