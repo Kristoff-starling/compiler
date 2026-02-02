@@ -117,6 +117,7 @@ def gen_code(
             output_name,
             element.proto,
             proto_module_name,
+            method_name,
         )
     elif "native" in backend_name:
         generator = NativeGenerator(placement)

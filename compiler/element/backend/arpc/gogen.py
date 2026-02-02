@@ -1,7 +1,7 @@
 from copy import deepcopy
 from typing import Dict, List, Optional, Set
 
-from compiler.utils import strip
+from compiler.utils import strip, snake_to_camel
 from compiler.element.logger import ELEMENT_LOG as LOG
 from compiler.element.visitor import Visitor
 from compiler.element.node import *
@@ -24,12 +24,14 @@ class ArpcContext:
         element_name: str,
         proto: Proto,
         proto_module_name: str,
+        method_name: str,
         tag: str = "0",
     ) -> None:
         self.element_name = element_name
         self.proto = proto
         self.proto_module_name = proto_module_name
         self.tag = tag
+        self.method_name = method_name
         # runtime
         self.current_procedure = ""
         self.global_var = set[str]()
@@ -105,7 +107,8 @@ class ArpcGenerator(Visitor):
         ctx.current_procedure = node.name
         package_name = ctx.proto.package_name
         if ctx.current_procedure != "init":
-            ctx.push_code(f"packet_raw := {package_name}.GetRequestRaw(packet.Payload)")
+            message = ctx.proto.get_message(ctx.method_name, ctx.current_procedure)
+            ctx.push_code(f"packet_raw := {package_name}.{message.name}Raw(packet.Payload)")
             ctx.push_code("_ = packet_raw")
         for stmt in node.body:
             stmt.accept(self, ctx)
@@ -184,11 +187,11 @@ class ArpcGenerator(Visitor):
         if strip(field_name) == "rpcid":
             return "string(packet.GetRPCID())"
         else:
-            return f"packet_raw.Get{strip(field_name).capitalize()}()"
+            return f"packet_raw.Get{snake_to_camel(strip(field_name))}()"
     
     def visitRpcSet(self, node: MethodCall, ctx: ArpcContext) -> str:
         assert isinstance(node.args[0], Literal), "rpc.set argument must be a literal"
-        return f"packet_raw.Set{strip(node.args[0].value).capitalize()}({node.args[1].accept(self, ctx)})"
+        return f"packet_raw.Set{snake_to_camel(strip(node.args[0].value))}({node.args[1].accept(self, ctx)})"
 
     @staticmethod
     def gen_map_get_helper_func(map_name: str, map_type: MapType, ctx: ArpcContext) -> str:
